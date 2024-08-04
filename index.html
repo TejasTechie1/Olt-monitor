@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ronak Internet Olts </title>
+    <title>Ronak Internet Olts</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.11.4/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Roboto+Mono&display=swap');
 
@@ -12,6 +13,7 @@
             --bg-color: #0a0a0a;
             --primary-color: #00ff00;
             --secondary-color: #ff00ff;
+            --tertiary-color: #00ffff;
             --text-color: #ffffff;
         }
 
@@ -35,13 +37,6 @@
             left: 0;
             width: 100%;
             height: 100%;
-            pointer-events: none;
-        }
-
-        .star {
-            position: absolute;
-            background-color: #ffffff;
-            border-radius: 50%;
         }
 
         #nexus {
@@ -60,6 +55,7 @@
             font-size: 24px;
             cursor: pointer;
             transition: all 0.3s ease;
+            z-index: 10;
         }
 
         #nexus:hover {
@@ -91,6 +87,7 @@
             padding: 20px;
             font-size: 14px;
             display: none;
+            z-index: 100;
         }
 
         #console {
@@ -106,16 +103,51 @@
             font-size: 12px;
             overflow-y: auto;
             display: none;
+            z-index: 100;
         }
 
         .console-line {
             margin-bottom: 5px;
         }
 
+        #network-stats {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background-color: rgba(0, 0, 0, 0.7);
+            border: 1px solid var(--tertiary-color);
+            padding: 15px;
+            font-size: 14px;
+            z-index: 100;
+        }
+
+        #network-stats h3 {
+            color: var(--tertiary-color);
+            margin-bottom: 10px;
+        }
+
+        .stat {
+            margin-bottom: 5px;
+        }
+
+        #alert-banner {
+            position: fixed;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: var(--secondary-color);
+            color: var(--bg-color);
+            padding: 10px 20px;
+            border-radius: 0 0 10px 10px;
+            font-weight: bold;
+            display: none;
+            z-index: 1000;
+        }
+
         @keyframes pulse {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.1); }
-            100% { transform: scale(1); }
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.5); opacity: 0.7; }
+            100% { transform: scale(1); opacity: 1; }
         }
 
         .pulse {
@@ -128,26 +160,56 @@
     <div id="nexus">Ronak Internet Olts</div>
     <div id="info-panel"></div>
     <div id="console"></div>
+    <div id="network-stats">
+        <h3>Network Overview</h3>
+        <div id="total-olts" class="stat"></div>
+        <div id="online-olts" class="stat"></div>
+        <div id="avg-response" class="stat"></div>
+    </div>
+    <div id="alert-banner"></div>
 
     <script>
         const API_URL = 'http://localhost:3000/api/olts';
         let oltData = [];
+        let scene, camera, renderer, starField;
 
-        function createStarryBackground() {
-            const universe = document.getElementById('universe');
-            for (let i = 0; i < 200; i++) {
-                const star = document.createElement('div');
-                star.className = 'star';
-                star.style.width = `${Math.random() * 2}px`;
-                star.style.height = star.style.width;
-                star.style.left = `${Math.random() * 100}%`;
-                star.style.top = `${Math.random() * 100}%`;
-                universe.appendChild(star);
+        function initThreeJS() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.getElementById('universe').appendChild(renderer.domElement);
+
+            starField = new THREE.Group();
+            scene.add(starField);
+
+            for (let i = 0; i < 1000; i++) {
+                const geometry = new THREE.SphereGeometry(0.05, 32, 32);
+                const material = new THREE.MeshBasicMaterial({ color: 0xffffff });
+                const star = new THREE.Mesh(geometry, material);
+                
+                star.position.set(
+                    Math.random() * 400 - 200,
+                    Math.random() * 400 - 200,
+                    Math.random() * 400 - 200
+                );
+                
+                starField.add(star);
             }
+
+            camera.position.z = 5;
+
+            function animate() {
+                requestAnimationFrame(animate);
+                starField.rotation.y += 0.0005;
+                renderer.render(scene, camera);
+            }
+            animate();
         }
 
         function createOLTNodes() {
             const nexus = document.getElementById('nexus');
+            nexus.innerHTML = ''; // Clear existing nodes
             oltData.forEach((olt, index) => {
                 const node = document.createElement('div');
                 node.className = 'olt-node';
@@ -157,6 +219,7 @@
                 const y = Math.sin(angle) * radius;
                 node.style.left = `${x + 150}px`;
                 node.style.top = `${y + 150}px`;
+                node.style.backgroundColor = olt.status ? getComputedStyle(document.documentElement).getPropertyValue('--primary-color') : getComputedStyle(document.documentElement).getPropertyValue('--secondary-color');
                 node.addEventListener('click', () => showOLTInfo(olt));
                 nexus.appendChild(node);
             });
@@ -190,11 +253,40 @@
             setTimeout(() => nexus.classList.remove('pulse'), 2000);
         }
 
+        function updateNetworkStats() {
+            const totalOLTs = oltData.length;
+            const onlineOLTs = oltData.filter(olt => olt.status).length;
+            const avgResponse = oltData.reduce((sum, olt) => sum + olt.response_time, 0) / totalOLTs;
+
+            document.getElementById('total-olts').textContent = `Total OLTs: ${totalOLTs}`;
+            document.getElementById('online-olts').textContent = `Online OLTs: ${onlineOLTs}`;
+            document.getElementById('avg-response').textContent = `Avg Response: ${avgResponse.toFixed(2)} ms`;
+        }
+
+        function showAlert(message) {
+            const alertBanner = document.getElementById('alert-banner');
+            alertBanner.textContent = message;
+            alertBanner.style.display = 'block';
+            setTimeout(() => { alertBanner.style.display = 'none'; }, 5000);
+        }
+
         async function fetchData() {
             try {
                 const response = await fetch(API_URL);
-                oltData = await response.json();
+                const newData = await response.json();
+                
+                // Check for changes and show alerts
+                if (oltData.length > 0) {
+                    newData.forEach((newOlt, index) => {
+                        if (newOlt.status !== oltData[index].status) {
+                            showAlert(`${newOlt.name} is now ${newOlt.status ? 'Online' : 'Offline'}`);
+                        }
+                    });
+                }
+                
+                oltData = newData;
                 createOLTNodes();
+                updateNetworkStats();
                 logToConsole('OLT data updated');
                 pulseNexus();
             } catch (error) {
@@ -207,20 +299,17 @@
             console.style.display = console.style.display === 'none' ? 'block' : 'none';
         });
 
-        createStarryBackground();
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        initThreeJS();
         fetchData();
         setInterval(fetchData, 30000);
 
         // GSAP animations
-        gsap.to('.star', {
-            opacity: 0.5,
-            stagger: 0.1,
-            repeat: -1,
-            yoyo: true,
-            duration: 2,
-            ease: "power2.inOut"
-        });
-
         gsap.to('#nexus', {
             rotation: 360,
             duration: 100,
