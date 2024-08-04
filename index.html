@@ -3,226 +3,230 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OLT Monitor</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.0/chart.min.js"></script>
+    <title>Ronak Internet Olts </title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.11.4/gsap.min.js"></script>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-            background-color: #f4f4f4;
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Roboto+Mono&display=swap');
+
+        :root {
+            --bg-color: #0a0a0a;
+            --primary-color: #00ff00;
+            --secondary-color: #ff00ff;
+            --text-color: #ffffff;
         }
-        h1 {
-            text-align: center;
-            color: #2c3e50;
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
-        .dashboard {
+
+        body, html {
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Roboto Mono', monospace;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+        }
+
+        #universe {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .star {
+            position: absolute;
+            background-color: #ffffff;
+            border-radius: 50%;
+        }
+
+        #nexus {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 300px;
+            height: 300px;
+            border: 2px solid var(--primary-color);
+            border-radius: 50%;
             display: flex;
-            flex-wrap: wrap;
-            justify-content: space-around;
-            margin-top: 20px;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 24px;
+            cursor: pointer;
+            transition: all 0.3s ease;
         }
-        .olt-card {
-            background-color: #fff;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+
+        #nexus:hover {
+            box-shadow: 0 0 20px var(--primary-color);
+        }
+
+        .olt-node {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background-color: var(--secondary-color);
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .olt-node:hover {
+            transform: scale(1.5);
+            box-shadow: 0 0 10px var(--secondary-color);
+        }
+
+        #info-panel {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 300px;
+            background-color: rgba(0, 0, 0, 0.7);
+            border: 1px solid var(--primary-color);
             padding: 20px;
-            margin: 10px;
-            width: calc(33% - 20px);
-            min-width: 250px;
+            font-size: 14px;
+            display: none;
         }
-        .olt-name {
-            font-size: 1.2em;
-            font-weight: bold;
-            margin-bottom: 10px;
-        }
-        .status {
-            display: inline-block;
-            padding: 5px 10px;
-            border-radius: 20px;
-            font-weight: bold;
-        }
-        .status.online {
-            background-color: #2ecc71;
-            color: #fff;
-        }
-        .status.offline {
-            background-color: #e74c3c;
-            color: #fff;
-        }
-        .ip-address {
-            color: #7f8c8d;
-            margin-top: 5px;
-        }
-        .last-checked {
-            font-size: 0.9em;
-            color: #95a5a6;
-            margin-top: 10px;
-        }
-        .chart-container {
-            margin-top: 20px;
-            height: 200px;
-        }
-        #log {
-            background-color: #fff;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            padding: 20px;
-            margin-top: 20px;
-            height: 200px;
+
+        #console {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            width: calc(100% - 40px);
+            height: 100px;
+            background-color: rgba(0, 0, 0, 0.7);
+            border: 1px solid var(--primary-color);
+            padding: 10px;
+            font-family: 'Roboto Mono', monospace;
+            font-size: 12px;
             overflow-y: auto;
+            display: none;
         }
-        .log-entry {
+
+        .console-line {
             margin-bottom: 5px;
-            padding: 5px;
-            border-bottom: 1px solid #ecf0f1;
         }
-        .log-entry.error {
-            color: #e74c3c;
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
         }
-        .log-entry.info {
-            color: #3498db;
-        }
-        .log-entry.warning {
-            color: #f39c12;
+
+        .pulse {
+            animation: pulse 2s infinite;
         }
     </style>
 </head>
 <body>
-    <h1>OLT Monitor Dashboard</h1>
-    <div class="dashboard" id="dashboard"></div>
-    <div id="log"></div>
+    <div id="universe"></div>
+    <div id="nexus">Ronak Internet Olts</div>
+    <div id="info-panel"></div>
+    <div id="console"></div>
 
     <script>
         const API_URL = 'http://localhost:3000/api/olts';
-        const UPDATE_INTERVAL = 60000; // 1 minute
+        let oltData = [];
 
-        function createOLTCard(olt) {
-            const card = document.createElement('div');
-            card.className = 'olt-card';
-            card.setAttribute('data-ip', olt.ip);  
-            card.innerHTML = `
-                <div class="olt-name">${olt.name}</div>
-                <div class="status">Checking...</div>
-                <div class="ip-address">${olt.ip}</div>
-                <div class="last-checked">Last checked: N/A</div>
-                <div class="chart-container">
-                    <canvas id="chart-${olt.ip.replace(/\./g, '-')}"></canvas>
-                </div>
-            `;
-            return card;
-        }
-
-        function updateOLTStatus(oltStatus) {
-            const oltCard = document.querySelector(`.olt-card[data-ip="${oltStatus.ip}"]`);
-            if (oltCard) {
-                const statusElement = oltCard.querySelector('.status');
-                statusElement.textContent = oltStatus.status ? 'Online' : 'Offline';
-                statusElement.className = `status ${oltStatus.status ? 'online' : 'offline'}`;
-                oltCard.querySelector('.last-checked').textContent = `Last checked: ${new Date(oltStatus.last_checked).toLocaleTimeString()}`;
+        function createStarryBackground() {
+            const universe = document.getElementById('universe');
+            for (let i = 0; i < 200; i++) {
+                const star = document.createElement('div');
+                star.className = 'star';
+                star.style.width = `${Math.random() * 2}px`;
+                star.style.height = star.style.width;
+                star.style.left = `${Math.random() * 100}%`;
+                star.style.top = `${Math.random() * 100}%`;
+                universe.appendChild(star);
             }
         }
 
-        function initializeChart(oltIP) {
-            const ctx = document.getElementById(`chart-${oltIP.replace(/\./g, '-')}`).getContext('2d');
-            return new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: [],
-                    datasets: [{
-                        label: 'Response Time (ms)',
-                        data: [],
-                        borderColor: 'rgb(75, 192, 192)',
-                        tension: 0.1
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        y: {
-                            beginAtZero: true
-                        }
-                    }
-                }
+        function createOLTNodes() {
+            const nexus = document.getElementById('nexus');
+            oltData.forEach((olt, index) => {
+                const node = document.createElement('div');
+                node.className = 'olt-node';
+                const angle = (index / oltData.length) * 2 * Math.PI;
+                const radius = 170;
+                const x = Math.cos(angle) * radius;
+                const y = Math.sin(angle) * radius;
+                node.style.left = `${x + 150}px`;
+                node.style.top = `${y + 150}px`;
+                node.addEventListener('click', () => showOLTInfo(olt));
+                nexus.appendChild(node);
             });
         }
 
-        function updateChart(chart, responseTime, timestamp) {
-            chart.data.labels.push(new Date(timestamp).toLocaleTimeString());
-            chart.data.datasets[0].data.push(responseTime);
-            
-            if (chart.data.labels.length > 10) {
-                chart.data.labels.shift();
-                chart.data.datasets[0].data.shift();
-            }
-            
-            chart.update();
+        function showOLTInfo(olt) {
+            const infoPanel = document.getElementById('info-panel');
+            infoPanel.innerHTML = `
+                <h3>${olt.name}</h3>
+                <p>IP: ${olt.ip}</p>
+                <p>Status: ${olt.status ? 'Online' : 'Offline'}</p>
+                <p>Response Time: ${olt.response_time} ms</p>
+                <p>Last Checked: ${new Date(olt.last_checked).toLocaleString()}</p>
+            `;
+            infoPanel.style.display = 'block';
+            logToConsole(`Accessed info for ${olt.name}`);
         }
 
-        function logMessage(message, type = 'info') {
-            const logContainer = document.getElementById('log');
-            const logEntry = document.createElement('div');
-            logEntry.className = `log-entry ${type}`;
-            logEntry.textContent = `${new Date().toLocaleTimeString()} - ${message}`;
-            logContainer.insertBefore(logEntry, logContainer.firstChild);
+        function logToConsole(message) {
+            const console = document.getElementById('console');
+            const line = document.createElement('div');
+            line.className = 'console-line';
+            line.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            console.appendChild(line);
+            console.scrollTop = console.scrollHeight;
         }
 
-        async function fetchOLTStatus() {
+        function pulseNexus() {
+            const nexus = document.getElementById('nexus');
+            nexus.classList.add('pulse');
+            setTimeout(() => nexus.classList.remove('pulse'), 2000);
+        }
+
+        async function fetchData() {
             try {
                 const response = await fetch(API_URL);
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                return await response.json();
+                oltData = await response.json();
+                createOLTNodes();
+                logToConsole('OLT data updated');
+                pulseNexus();
             } catch (error) {
-                logMessage(`Error fetching OLT status: ${error.message}`, 'error');
-                return [];
+                logToConsole('Error fetching OLT data: ' + error.message);
             }
         }
 
-        function updateDashboard(oltStatuses) {
-            oltStatuses.forEach
-            (status => {
-                updateOLTStatus(status);
-                const chart = charts[status.ip];
-                if (chart) {
-                    updateChart(chart, status.response_time, status.last_checked);
-                }
-                
-                if (!status.status) {
-                    logMessage(`Issue detected with ${status.name} (${status.ip}). Please check immediately.`, 'error');
-                } else {
-                    logMessage(`${status.name} (${status.ip}): Responding to ping`, 'info');
-                }
-            });
-        }
+        document.getElementById('nexus').addEventListener('click', () => {
+            const console = document.getElementById('console');
+            console.style.display = console.style.display === 'none' ? 'block' : 'none';
+        });
 
-        const charts = {};
+        createStarryBackground();
+        fetchData();
+        setInterval(fetchData, 30000);
 
-        async function monitorOLTs() {
-            const dashboard = document.getElementById('dashboard');
-            
-            // Initial load
-            const initialStatus = await fetchOLTStatus();
-            initialStatus.forEach(olt => {
-                const oltCard = createOLTCard(olt);
-                dashboard.appendChild(oltCard);
-                charts[olt.ip] = initializeChart(olt.ip);
-            });
+        // GSAP animations
+        gsap.to('.star', {
+            opacity: 0.5,
+            stagger: 0.1,
+            repeat: -1,
+            yoyo: true,
+            duration: 2,
+            ease: "power2.inOut"
+        });
 
-            // Periodic updates
-            setInterval(async () => {
-                const oltStatuses = await fetchOLTStatus();
-                updateDashboard(oltStatuses);
-            }, UPDATE_INTERVAL);
-        }
-
-        document.addEventListener('DOMContentLoaded', monitorOLTs);
-    
+        gsap.to('#nexus', {
+            rotation: 360,
+            duration: 100,
+            repeat: -1,
+            ease: "none"
+        });
     </script>
 </body>
 </html>
